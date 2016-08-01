@@ -10,15 +10,15 @@ constexpr uint8_t DRIVE_LEFT_PIN_B = 4;
 constexpr uint8_t DRIVE_RIGHT_PIN_A = 5;
 constexpr uint8_t DRIVE_RIGHT_PIN_B = 6;
 
-constexpr uint8_t ENCODER_LEFT_PIN_A = 7;
-constexpr uint8_t ENCODER_LEFT_PIN_B = 8;
-constexpr uint8_t ENCODER_RIGHT_PIN_A = 9;
-constexpr uint8_t ENCODER_RIGHT_PIN_B = 10;
+constexpr uint8_t ENCODER_LEFT_PIN_A = 11;
+constexpr uint8_t ENCODER_LEFT_PIN_B = 12;
+constexpr uint8_t ENCODER_RIGHT_PIN_A = 13;
+constexpr uint8_t ENCODER_RIGHT_PIN_B = 14;
 
-constexpr uint8_t FRONT_LEFT_IR_PIN = 11;
-constexpr uint8_t FRONT_RIGHT_IR_PIN = 12;
-constexpr uint8_t REAR_LEFT_IR_PIN = 13;
-constexpr uint8_t REAR_RIGHT_IR_PIN = 14;
+constexpr uint8_t FRONT_LEFT_IR_PIN = 7;
+constexpr uint8_t FRONT_RIGHT_IR_PIN = 8;
+constexpr uint8_t REAR_LEFT_IR_PIN = 9;
+constexpr uint8_t REAR_RIGHT_IR_PIN = 10;
 
 constexpr uint8_t START_PIN = 15;
 
@@ -37,8 +37,20 @@ constexpr uint8_t LCD_D7_PIN = 23;
 // initialize the library with the numbers of the interface pins
 LiquidCrystal lcd(LCD_RS_PIN, LCD_ENABLE_PIN, LCD_D4_PIN, LCD_D5_PIN, LCD_D6_PIN, LCD_D7_PIN);
 
+enum PROG{
+  DRIVE_STRAIGHT,
+  CAN_RUN,
+  NUM_PROGRAMS
+};
+
+
 volatile double leftEncoderCount = 0;
 volatile double rightEncoderCount = 0;
+
+volatile bool isLeftFrontTriggered = false;
+volatile bool isRightFrontTriggered = false;
+volatile bool isLeftRearTriggered = false;
+volatile bool isRightRearTriggered = false;
 
 void initPins() {
   pinMode(DRIVE_LEFT_PIN_A, OUTPUT);
@@ -49,19 +61,52 @@ void initPins() {
   pinMode(START_PIN, INPUT_PULLUP);
 
   // TODO: this is where I'm at. Don't trust anything past this point. Probably not much before this point either, but.....
-  pinMode(ENCODER_LEFT_PIN_A, INPUT);
-  pinMode(ENCODER_LEFT_PIN_B, INPUT);
-  pinMode(ENCODER_RIGHT_PIN_A, INPUT);
-  pinMode(ENCODER_RIGHT_PIN_B, INPUT);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_LEFT_PIN_A), ISR_ENC_LA, RISING);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_LEFT_PIN_B), ISR_ENC_LB, RISING);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_RIGHT_PIN_A), ISR_ENC_RA, RISING);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_RIGHT_PIN_B), ISR_ENC_RB, RISING);
+  pinMode(FRONT_LEFT_IR_PIN, INPUT);
+  pinMode(FRONT_RIGHT_IR_PIN, INPUT);
+  pinMode(REAR_LEFT_IR_PIN, INPUT);
+  pinMode(REAR_RIGHT_IR_PIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(FRONT_LEFT_IR_PIN), ISR_IR_LF, RISING);
+  attachInterrupt(digitalPinToInterrupt(FRONT_RIGHT_IR_PIN), ISR_IR_RF, RISING);
+  attachInterrupt(digitalPinToInterrupt(REAR_LEFT_IR_PIN), ISR_IR_LR, RISING);
+  attachInterrupt(digitalPinToInterrupt(REAR_RIGHT_IR_PIN), ISR_IR_RR, RISING);
 
   // initialize LCD and set up the number of columns and rows:
   lcd.begin(16, 2);
 
 }
+
+void DisplayString(int currentProgramSelected)
+{
+  lcd.setCursor(0, 0);
+
+  switch(currentProgramSelected)
+  {
+    case 0:
+        lcd.print("Encoder Test");
+        break;
+    case 1:
+        lcd.print("Main");
+        break;
+    default:
+        lcd.print("Unknown Input");
+        break;
+  }
+}
+
+int ProgramSelect()
+{
+  int interval = 1024 / NUM_PROGRAMS; // truncate to whole number
+  int currentSelected = 0;
+
+  while(digitalRead(START_PIN))
+  {
+    currentSelected = analogRead(START_PIN) / interval;
+    DisplayString(currentSelected);
+  }
+
+  return currentSelected;
+}
+
 
 void SetDrive(int left, int right)
 {
@@ -88,107 +133,92 @@ void SetDrive(int left, int right)
   }
 }
 
+void DriveLogic()
+{
+  //nah this is actually really bad, the interrupts are only going to stop it if they retrigger at a certain time, wtf am I even doing here?
+  if(isLeftFrontTriggered)
+  {
+    delay(100);
+    SetDrive(-200, -200);
+    delay(700);
+    SetDrive(200, -200);
+    delay(400); //don't do this, this is awful;
+    if(!digitalRead(FRONT_LEFT_IR_PIN))
+    {
+      isLeftFrontTriggered = false;
+      isRightFrontTriggered = false;
+    }
+  }
+  else if(isRightFrontTriggered)
+  {
+    delay(100);
+    SetDrive(-200, -200);
+    delay(700);
+    SetDrive(-200, 200);
+    delay(400); //don't do this, this is awful;
+    if(!digitalRead(FRONT_RIGHT_IR_PIN))
+    {
+      isLeftFrontTriggered = false;
+      isRightFrontTriggered = false;
+    }
+  }
+  else
+  {
+    SetDrive(185, 185);
+  }
+}
+
 // the setup routine runs once when you press reset:
 void setup() {
   Serial.begin(9600);
   initPins();
+  SetDrive(0, 0);
+    while (digitalRead(START_PIN))
+    {
+      delay(100);
+    }
+    isLeftFrontTriggered = false;
+    isRightFrontTriggered = false;
+    delay(500);
+
 }
 
-// the loop routine runs over and over again forever:
+// the loop routine runs over and over again 5ever:
 void loop() {
-//  while (digitalRead(START_PIN))
-//  {
-//    delay(100);
-//  }
-//
-//
-//  SetDrive(0, 0);
-//  delay(500);
-//
-//  SetDrive(200, 200);
-//
-//
-//  delay(1000);
 
-  cli();
-  lcd.setCursor(0, 0);
-  lcd.print("L: ");
-  lcd.print(leftEncoderCount);
-  lcd.setCursor(0, 1);
-  lcd.print("R: ");
-  lcd.print(rightEncoderCount);
-  sei();
+  DriveLogic();
 
-//  SetDrive(0, 0);
-//  delay(500);
-//
-//  SetDrive(-200, -200);
-//  delay(1000);
-//  cli();
-//  lcd.setCursor(0, 0);
-//  lcd.print("L: ");
-//  lcd.print(round(leftEncoderCount));
-//  lcd.setCursor(0, 1);
-//  lcd.print("R: ");
-//  lcd.print(round(rightEncoderCount));
-//  sei();
-//
-//  SetDrive(0, 0);
 }
 
-void ISR_ENC_LA()
+void ISR_IR_LF()
 {
-//  if (digitalRead(ENCODER_LEFT_PIN_B))
-//  {
-//    if (leftEncoderCount < 0xFFFFFFFFFFFFFFFF)
-      leftEncoderCount++;
-//  }
-//  else
-//  {
-//    if (leftEncoderCount > 0)
-//      leftEncoderCount--;
-//  }
+  if(!isLeftFrontTriggered)
+  {
+//    SetDrive(0, 0);
+  }
+  isLeftFrontTriggered = true;
 }
 
-void ISR_ENC_LB()
+void ISR_IR_RF()
 {
-//  if (!digitalRead(ENCODER_LEFT_PIN_A))
-//  {
-//    if (leftEncoderCount < 0xFFFFFFFFFFFFFFFF)
-      leftEncoderCount++;
-//  }
-//  else
-//  {
-//    if (leftEncoderCount > 0)
-//      leftEncoderCount--;
-//  }
+  if(!isRightFrontTriggered) //hack debounce
+  {
+//    SetDrive(0, 0);
+  }
+  isRightFrontTriggered = true;
 }
 
-void ISR_ENC_RA()
+void ISR_IR_LR()
 {
-  if (!digitalRead(ENCODER_RIGHT_PIN_B))
-  {
-    if (rightEncoderCount < 0xFFFFFFFFFFFFFFFF)
-      rightEncoderCount++;
-  }
-  else
-  {
-    if (rightEncoderCount > 0)
-      rightEncoderCount--;
-  }
+  SetDrive(0, 0);
+  isLeftRearTriggered = true;
 }
 
-void ISR_ENC_RB()
+void ISR_IR_RR()
 {
-  if (digitalRead(ENCODER_RIGHT_PIN_A))
-  {
-    if (rightEncoderCount < 0xFFFFFFFFFFFFFFFF)
-      rightEncoderCount++;
-  }
-  else
-  {
-    if (rightEncoderCount > 0)
-      rightEncoderCount--;
-  }
+  SetDrive(0, 0);
+  isRightRearTriggered = true;
 }
+
+
 
