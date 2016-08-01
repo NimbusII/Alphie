@@ -9,20 +9,20 @@
 #define MODE_DEBUG 1
 #define GUI_UPDATE_TIME   25000
 
-constexpr uint8_t DRIVE_LEFT_PIN_A = 3;
-constexpr uint8_t DRIVE_LEFT_PIN_B = 4;
-constexpr uint8_t DRIVE_RIGHT_PIN_A = 5;
-constexpr uint8_t DRIVE_RIGHT_PIN_B = 6;
+constexpr uint8_t DRIVE_LEFT_PIN_A = 5;
+constexpr uint8_t DRIVE_LEFT_PIN_B = 6;
+constexpr uint8_t DRIVE_RIGHT_PIN_A = 9;
+constexpr uint8_t DRIVE_RIGHT_PIN_B = 10;
 
-constexpr uint8_t ENCODER_LEFT_PIN_A = 11;
-constexpr uint8_t ENCODER_LEFT_PIN_B = 12;
-constexpr uint8_t ENCODER_RIGHT_PIN_A = 13;
-constexpr uint8_t ENCODER_RIGHT_PIN_B = 14;
+//constexpr uint8_t ENCODER_LEFT_PIN_A = 11; 3
+//constexpr uint8_t ENCODER_LEFT_PIN_B = 12; 4
+//constexpr uint8_t ENCODER_RIGHT_PIN_A = 13; 25
+//constexpr uint8_t ENCODER_RIGHT_PIN_B = 14; 32
 
 constexpr uint8_t FRONT_LEFT_IR_PIN = 7;
 constexpr uint8_t FRONT_RIGHT_IR_PIN = 8;
-constexpr uint8_t REAR_LEFT_IR_PIN = 9;
-constexpr uint8_t REAR_RIGHT_IR_PIN = 10;
+constexpr uint8_t REAR_LEFT_IR_PIN = 11;
+constexpr uint8_t REAR_RIGHT_IR_PIN = 12;
 
 constexpr uint8_t START_PIN = 15;
 
@@ -42,13 +42,13 @@ constexpr uint8_t LCD_D7_PIN = 23;
 // Command headers for X,Y data channels
 const char cmd1[] = "RX";
 const char cmd2[] = "RY";
-const char* cmdPointers[]= {cmd1,cmd2};
+const char* cmdPointers[] = {cmd1, cmd2};
 const uint8_t num_cmds = 2;  // Generated Postition in latched position
 // Variables from CMM program
-volatile int32_t rtX=0, rtY=0;  // Realtime values of X,Y,Z
-volatile bool zero_rtX=0, zero_rtY=0;   // Zero values of X,Y,Z
+volatile int32_t rtX = 0, rtY = 0; // Realtime values of X,Y,Z
+volatile bool zero_rtX = 0, zero_rtY = 0; // Zero values of X,Y,Z
 
-volatile bool doOutput=false;  // Run output routine
+volatile bool doOutput = false; // Run output routine
 
 IntervalTimer serialTimer;  // How often to update serial
 
@@ -62,7 +62,7 @@ QuadDecode<2> yPosn;  // Template using FTM2
 // initialize the library with the numbers of the interface pins
 LiquidCrystal lcd(LCD_RS_PIN, LCD_ENABLE_PIN, LCD_D4_PIN, LCD_D5_PIN, LCD_D6_PIN, LCD_D7_PIN);
 
-enum PROG{
+enum PROG {
   DRIVE_STRAIGHT,
   CAN_RUN,
   NUM_PROGRAMS
@@ -104,17 +104,17 @@ void DisplayString(int currentProgramSelected)
 {
   lcd.setCursor(0, 0);
 
-  switch(currentProgramSelected)
+  switch (currentProgramSelected)
   {
     case 0:
-        lcd.print("Encoder Test");
-        break;
+      lcd.print("Encoder Test");
+      break;
     case 1:
-        lcd.print("Main");
-        break;
+      lcd.print("Main");
+      break;
     default:
-        lcd.print("Unknown Input");
-        break;
+      lcd.print("Unknown Input");
+      break;
   }
 }
 
@@ -123,7 +123,7 @@ int ProgramSelect()
   int interval = 1024 / NUM_PROGRAMS; // truncate to whole number
   int currentSelected = 0;
 
-  while(digitalRead(START_PIN))
+  while (digitalRead(START_PIN))
   {
     currentSelected = analogRead(START_PIN) / interval;
     DisplayString(currentSelected);
@@ -161,27 +161,27 @@ void SetDrive(int left, int right)
 void DriveLogic()
 {
   //nah this is actually really bad, the interrupts are only going to stop it if they retrigger at a certain time, wtf am I even doing here?
-  if(isLeftFrontTriggered)
+  if (isLeftFrontTriggered)
   {
     delay(100);
     SetDrive(-200, -200);
     delay(700);
     SetDrive(200, -200);
     delay(400); //don't do this, this is awful;
-    if(!digitalRead(FRONT_LEFT_IR_PIN))
+    if (!digitalRead(FRONT_LEFT_IR_PIN))
     {
       isLeftFrontTriggered = false;
       isRightFrontTriggered = false;
     }
   }
-  else if(isRightFrontTriggered)
+  else if (isRightFrontTriggered)
   {
     delay(100);
     SetDrive(-200, -200);
     delay(700);
     SetDrive(-200, 200);
     delay(400); //don't do this, this is awful;
-    if(!digitalRead(FRONT_RIGHT_IR_PIN))
+    if (!digitalRead(FRONT_RIGHT_IR_PIN))
     {
       isLeftFrontTriggered = false;
       isRightFrontTriggered = false;
@@ -198,37 +198,82 @@ void setup() {
   Serial.begin(9600);
   initPins();
   SetDrive(0, 0);
-    while (digitalRead(START_PIN))
-    {
-      delay(100);
-    }
-    isLeftFrontTriggered = false;
-    isRightFrontTriggered = false;
-    delay(500);
+
+  xPosn.setup();      // Start Quad Decode position count
+  yPosn.setup();      // Start Quad Decode position count
+
+  serialTimer.begin(timerInt, GUI_UPDATE_TIME); // GUI Update time
+
+  while (digitalRead(START_PIN))
+  {
+    delay(100);
+  }
+  isLeftFrontTriggered = false;
+  isRightFrontTriggered = false;
+  delay(500);
 
 }
 
 // the loop routine runs over and over again 5ever:
-void loop() {
+extern "C" int main(void)
+{
+  setup();
 
-  DriveLogic();
+  int32_t buffer[2];  // Values to send, X,Y,Z realtime and latched
+
+  while (true)
+  {
+    DriveLogic();
+
+    if (doOutput)
+    {
+      doOutput = false;
+
+      if (zero_rtX )
+      {
+        xPosn.zeroFTM();
+      }
+
+      rtX = xPosn.calcPosn();
+
+      if (zero_rtY )
+      {
+        yPosn.zeroFTM();
+      }
+      rtY = yPosn.calcPosn();
+
+      // Send out axis values
+      buffer[0] = rtX;
+      buffer[1] = rtY;
+
+      // Send out rtX, rtY values
+      for (uint8_t j = 0; j < 2; ++j)
+      {
+        Serial.print(cmdPointers[j]);
+        Serial.println(buffer[j]);
+      }
+
+      Serial.println("MSTeensy Loop");
+
+    }
+  }
 
 }
 
 void ISR_IR_LF()
 {
-  if(!isLeftFrontTriggered)
+  if (!isLeftFrontTriggered)
   {
-//    SetDrive(0, 0);
+    //    SetDrive(0, 0);
   }
   isLeftFrontTriggered = true;
 }
 
 void ISR_IR_RF()
 {
-  if(!isRightFrontTriggered) //hack debounce
+  if (!isRightFrontTriggered) //hack debounce
   {
-//    SetDrive(0, 0);
+    //    SetDrive(0, 0);
   }
   isRightFrontTriggered = true;
 }
@@ -245,5 +290,8 @@ void ISR_IR_RR()
   isRightRearTriggered = true;
 }
 
-
+void timerInt(void)
+{
+    doOutput=true;
+}
 
