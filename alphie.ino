@@ -2,8 +2,12 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <LiquidCrystal.h>
+#include "WProgram.h"
+#include "QuadDecode_def.h"
+#include <stdbool.h>
 
 #define MODE_DEBUG 1
+#define GUI_UPDATE_TIME   25000
 
 constexpr uint8_t DRIVE_LEFT_PIN_A = 3;
 constexpr uint8_t DRIVE_LEFT_PIN_B = 4;
@@ -33,6 +37,27 @@ constexpr uint8_t LCD_D7_PIN = 23;
 // 2
 // 13-18 (13 built in led)
 // 16, 17 will probably be secondary motors at some point
+
+///////////////////ENCODERS////////////////////
+// Command headers for X,Y data channels
+const char cmd1[] = "RX";
+const char cmd2[] = "RY";
+const char* cmdPointers[]= {cmd1,cmd2};
+const uint8_t num_cmds = 2;  // Generated Postition in latched position
+// Variables from CMM program
+volatile int32_t rtX=0, rtY=0;  // Realtime values of X,Y,Z
+volatile bool zero_rtX=0, zero_rtY=0;   // Zero values of X,Y,Z
+
+volatile bool doOutput=false;  // Run output routine
+
+IntervalTimer serialTimer;  // How often to update serial
+
+void timerInt(void);  // Main timing loop interrupt
+
+QuadDecode<1> xPosn;  // Template using FTM1
+QuadDecode<2> yPosn;  // Template using FTM2
+
+//////////////////////////////////////////////////////
 
 // initialize the library with the numbers of the interface pins
 LiquidCrystal lcd(LCD_RS_PIN, LCD_ENABLE_PIN, LCD_D4_PIN, LCD_D5_PIN, LCD_D6_PIN, LCD_D7_PIN);

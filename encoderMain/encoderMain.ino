@@ -198,7 +198,7 @@
 #include <stdbool.h>
 
 // Timing for GUI update time, how often send back data values
-#define GUI_UPDATE_TIME	 25000	// 200 mSec update
+#define GUI_UPDATE_TIME	 25000	// 20 mSec update
 
 // Command headers for X,Y,Z data channels
 const char cmd1[] = "RX";
@@ -227,15 +227,11 @@ void timerInt(void);	// Main timing loop interrupt
 QuadDecode<1> xPosn;	// Template using FTM1
 QuadDecode<2> yPosn;	// Template using FTM2
 
-
 extern "C" int main(void)
 {   
 	//bool LED_ON=false;
 
-	char inbuf[3];  // Characters to be received
-	char inByte;
 	int32_t buffer[6];  // Values to send, X,Y,Z realtime and latched
-	uint8_t n;	    // Number of characters received
 	uint8_t j;
 
 	Serial.begin(9600); // USB is always 12 Mbit/sec
@@ -253,69 +249,22 @@ extern "C" int main(void)
 		if (doOutput){
 		    doOutput=false;
 
-		    // Read in string to zero axis
-		    if (Serial.available()){
-			while (Serial.available()){
-			    inByte=Serial.read();
-			    if (inByte == 'Z'){	    // Start byte detected
-				for(n=0;n<3;n++){  //    read in string
-				    inbuf[n]=Serial.read();
-				}
-			    }
-			}
-			// Echo value back for diagnostics
-			Serial.print("MSByteReceived is ");
-			for(int8_t ib =0; ib < 3; ib++){
-			    Serial.write(inbuf[ib]);
-			}
-			Serial.println(" ");
-		    };
-
-		    // Determine if need to zero input
-
-		    // Zero axis posn from GUI
-		    if (inbuf[0]=='1'){
-		       	zero_rtX=true;
-			inbuf[0]='0';
-		    }
-		    else zero_rtX=false;
-
-		    if (inbuf[1]=='1'){
-		       	zero_rtY=true;
-			inbuf[1]='0';
-		    }
-		    else zero_rtY=false;
-
-		    if (inbuf[2]=='1'){
-		       	zero_rtZ=true;
-			inbuf[2]='0';
-		    }
-		    else zero_rtZ=false;
-		    
 		    if (zero_rtX ){
 			xPosn.zeroFTM(); 			
 		    }
 		    rtX=xPosn.calcPosn();
 
-		    if (zero_rtY ){
+		    if (zero_rtY )
+		    {
 			yPosn.zeroFTM(); 			
 		    }
 		    rtY=yPosn.calcPosn();
 
-
-		    // Set Generated value in latched position for debug
-//		    ltX=genEnc1.getPosn();  // X generated position
-//		    ltY=genEnc2.getPosn();  // Y generated position
-
 		    // Send out axis values
 		    buffer[0] = rtX;
 		    buffer[1] = rtY;
-		    buffer[2] = rtZ;
-		    buffer[3] = ltX;
-		    buffer[4] = ltY;			
-		    buffer[5] = ltZ;
 		    
-		    // Send out rtX, rtY, rtZ values
+		    // Send out rtX, rtY values
 		    for (j=0;j<2;++j)
 		    {
 			    Serial.print(cmdPointers[j]);
