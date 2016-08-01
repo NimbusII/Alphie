@@ -191,17 +191,14 @@
  */
 
 
-#define GEN_ENCODER		// Include encoder test signals code
+//#define GEN_ENCODER		// Include encoder test signals code
 
 #include "WProgram.h"
 #include "QuadDecode_def.h"
-#ifdef GEN_ENCODER
-#include "GenEncoder.h"
-#endif
 #include <stdbool.h>
 
 // Timing for GUI update time, how often send back data values
-#define GUI_UPDATE_TIME	 250000	// 200 mSec update
+#define GUI_UPDATE_TIME	 25000	// 200 mSec update
 
 // Command headers for X,Y,Z data channels
 const char cmd1[] = "RX";
@@ -225,34 +222,6 @@ volatile bool doOutput=false;	// Run output routine
 
 IntervalTimer serialTimer;	// How often to update serial
 
-// Generate test encoder signals
-#ifdef GEN_ENCODER
-/*struct GenEncData{
-    int32_t maxPosn;
-    int32_t minPosn;
-    int32_t cycleMax;
-    int32_t cycleMin;
-    int32_t cycleCenter;
-    int cycleCrossings;
-    int bigCrossings;
-};*/
-
-const int ENCOUT1_A = 9;    // Pinouts
-const int ENCOUT1_B = 10;
-const int32_t ENC_UPDATE_TIME1 = 433;    // uSec 
-
-GenEncData genEncData1 ={95000,-25000,10,-10,0,100,2};
-
-GenEncoder genEnc1(ENCOUT1_A,ENCOUT1_B,ENC_UPDATE_TIME1,genEncData1,0);
-
-const int ENCOUT2_A = 15;   // Pinouts
-const int ENCOUT2_B = 14;
-const int32_t ENC_UPDATE_TIME2 = 70;    // uSec
-GenEncData genEncData2 ={120000,-66000,10000,-25000,24576,4,3};
-
-GenEncoder genEnc2(ENCOUT2_A,ENCOUT2_B,ENC_UPDATE_TIME2,genEncData2,1);
-#endif
-
 void timerInt(void);	// Main timing loop interrupt
 
 QuadDecode<1> xPosn;	// Template using FTM1
@@ -273,12 +242,6 @@ extern "C" int main(void)
 
 	xPosn.setup();	    // Start Quad Decode position count
 	yPosn.setup();	    // Start Quad Decode position count
-
-	// Start encoder test signal generation
-#ifdef GEN_ENCODER
-	genEnc1.start();
-	genEnc2.start();
-#endif
 
 	serialTimer.begin(timerInt,GUI_UPDATE_TIME);	// GUI Update time
 
@@ -330,28 +293,19 @@ extern "C" int main(void)
 		    else zero_rtZ=false;
 		    
 		    if (zero_rtX ){
-#ifdef GEN_ENCODER
-			genEnc1.setZero();
-#endif
 			xPosn.zeroFTM(); 			
 		    }
 		    rtX=xPosn.calcPosn();
 
 		    if (zero_rtY ){
-#ifdef GEN_ENCODER
-			genEnc2.setZero();
-#endif
 			yPosn.zeroFTM(); 			
 		    }
 		    rtY=yPosn.calcPosn();
-		    
-		    if (zero_rtZ ){
-			rtZ=0;
-		    }
+
 
 		    // Set Generated value in latched position for debug
-		    ltX=genEnc1.getPosn();  // X generated position
-		    ltY=genEnc2.getPosn();  // Y generated position
+//		    ltX=genEnc1.getPosn();  // X generated position
+//		    ltY=genEnc2.getPosn();  // Y generated position
 
 		    // Send out axis values
 		    buffer[0] = rtX;
@@ -360,17 +314,16 @@ extern "C" int main(void)
 		    buffer[3] = ltX;
 		    buffer[4] = ltY;			
 		    buffer[5] = ltZ;
-    
-		    Serial.println("MSTeensy Loop");	
 		    
 		    // Send out rtX, rtY, rtZ values
-		    for (j=0;j<num_cmds;++j){
+		    for (j=0;j<2;++j)
+		    {
 			    Serial.print(cmdPointers[j]);
 			    Serial.println(buffer[j]);
 
 		    }
-
-		    Serial.println("MSEnd of Loop");	
+       
+       Serial.println("MSTeensy Loop");  
 
 		}
 	    }
