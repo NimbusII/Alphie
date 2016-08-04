@@ -4,20 +4,22 @@
 #include <LiquidCrystal.h>
 #include "WProgram.h"
 #include "QuadDecode_def.h"
+//#include "DriveFunction/s.h"
 #include <stdbool.h>
 
 #define MODE_DEBUG 1
-#define GUI_UPDATE_TIME   25000
+#define GUI_UPDATE_TIME   100000 //1s
+#define STRAIGHTEN_SCALING_FACTOR 100
 
 constexpr uint8_t DRIVE_LEFT_PIN_A = 5;
 constexpr uint8_t DRIVE_LEFT_PIN_B = 6;
 constexpr uint8_t DRIVE_RIGHT_PIN_A = 9;
 constexpr uint8_t DRIVE_RIGHT_PIN_B = 10;
 
-//constexpr uint8_t ENCODER_LEFT_PIN_A = 11; 3
-//constexpr uint8_t ENCODER_LEFT_PIN_B = 12; 4
-//constexpr uint8_t ENCODER_RIGHT_PIN_A = 13; 25
-//constexpr uint8_t ENCODER_RIGHT_PIN_B = 14; 32
+//constexpr uint8_t ENCODER_LEFT_PIN_A = 3
+//constexpr uint8_t ENCODER_LEFT_PIN_B = 4
+//constexpr uint8_t ENCODER_RIGHT_PIN_A = 25
+//constexpr uint8_t ENCODER_RIGHT_PIN_B = 32
 
 constexpr uint8_t FRONT_LEFT_IR_PIN = 7;
 constexpr uint8_t FRONT_RIGHT_IR_PIN = 8;
@@ -39,23 +41,19 @@ constexpr uint8_t LCD_D7_PIN = 23;
 // 16, 17 will probably be secondary motors at some point
 
 ///////////////////ENCODERS////////////////////
-// Command headers for X,Y data channels
-const char cmd1[] = "RX";
-const char cmd2[] = "RY";
-const char* cmdPointers[] = {cmd1, cmd2};
-const uint8_t num_cmds = 2;  // Generated Postition in latched position
-// Variables from CMM program
-volatile int32_t rtX = 0, rtY = 0; // Realtime values of X,Y,Z
-volatile bool zero_rtX = 0, zero_rtY = 0; // Zero values of X,Y,Z
+volatile int32_t rtL = 0, rtR = 0;
 
 volatile bool doOutput = false; // Run output routine
 
-IntervalTimer serialTimer;  // How often to update serial
+IntervalTimer serialTimer;
 
 void timerInt(void);  // Main timing loop interrupt
 
-QuadDecode<1> xPosn;  // Template using FTM1
-QuadDecode<2> yPosn;  // Template using FTM2
+QuadDecode<1> leftEncoder;  // Template using FTM1
+QuadDecode<2> rightEncoder;  // Template using FTM2
+
+
+//        rightEncoder.zeroFTM();
 
 //////////////////////////////////////////////////////
 
@@ -68,14 +66,20 @@ enum PROG {
   NUM_PROGRAMS
 };
 
-
-volatile double leftEncoderCount = 0;
-volatile double rightEncoderCount = 0;
-
 volatile bool isLeftFrontTriggered = false;
 volatile bool isRightFrontTriggered = false;
 volatile bool isLeftRearTriggered = false;
 volatile bool isRightRearTriggered = false;
+
+int leftSpeed = 0;
+int rightSpeed = 0;
+
+///////////////FUNCTION DECLERAIONS////////////
+
+void SetDrive(int left, int right);
+void DriveStraight(int desiredSpeed);
+
+/////////////////////////////////////////////
 
 void initPins() {
   pinMode(DRIVE_LEFT_PIN_A, OUTPUT);
@@ -84,8 +88,7 @@ void initPins() {
   pinMode(DRIVE_RIGHT_PIN_B, OUTPUT);
 
   pinMode(START_PIN, INPUT_PULLUP);
-
-  // TODO: this is where I'm at. Don't trust anything past this point. Probably not much before this point either, but.....
+  
   pinMode(FRONT_LEFT_IR_PIN, INPUT);
   pinMode(FRONT_RIGHT_IR_PIN, INPUT);
   pinMode(REAR_LEFT_IR_PIN, INPUT);
@@ -97,100 +100,6 @@ void initPins() {
 
   // initialize LCD and set up the number of columns and rows:
   lcd.begin(16, 2);
-
-}
-
-void DisplayString(int currentProgramSelected)
-{
-  lcd.setCursor(0, 0);
-
-  switch (currentProgramSelected)
-  {
-    case 0:
-      lcd.print("Encoder Test");
-      break;
-    case 1:
-      lcd.print("Main");
-      break;
-    default:
-      lcd.print("Unknown Input");
-      break;
-  }
-}
-
-int ProgramSelect()
-{
-  int interval = 1024 / NUM_PROGRAMS; // truncate to whole number
-  int currentSelected = 0;
-
-  while (digitalRead(START_PIN))
-  {
-    currentSelected = analogRead(START_PIN) / interval;
-    DisplayString(currentSelected);
-  }
-
-  return currentSelected;
-}
-
-
-void SetDrive(int left, int right)
-{
-  if (left >= 0)
-  {
-    analogWrite(DRIVE_LEFT_PIN_A, abs(left));
-    analogWrite(DRIVE_LEFT_PIN_B, 0);
-  }
-  else
-  {
-    analogWrite(DRIVE_LEFT_PIN_A, 0);
-    analogWrite(DRIVE_LEFT_PIN_B, abs(left));
-  }
-
-  if (right >= 0)
-  {
-    analogWrite(DRIVE_RIGHT_PIN_A, abs(right));
-    analogWrite(DRIVE_RIGHT_PIN_B, 0);
-  }
-  else
-  {
-    analogWrite(DRIVE_RIGHT_PIN_A, 0);
-    analogWrite(DRIVE_RIGHT_PIN_B, abs(right));
-  }
-}
-
-void DriveLogic()
-{
-  //nah this is actually really bad, the interrupts are only going to stop it if they retrigger at a certain time, wtf am I even doing here?
-  if (isLeftFrontTriggered)
-  {
-    delay(100);
-    SetDrive(-200, -200);
-    delay(700);
-    SetDrive(200, -200);
-    delay(400); //don't do this, this is awful;
-    if (!digitalRead(FRONT_LEFT_IR_PIN))
-    {
-      isLeftFrontTriggered = false;
-      isRightFrontTriggered = false;
-    }
-  }
-  else if (isRightFrontTriggered)
-  {
-    delay(100);
-    SetDrive(-200, -200);
-    delay(700);
-    SetDrive(-200, 200);
-    delay(400); //don't do this, this is awful;
-    if (!digitalRead(FRONT_RIGHT_IR_PIN))
-    {
-      isLeftFrontTriggered = false;
-      isRightFrontTriggered = false;
-    }
-  }
-  else
-  {
-    SetDrive(185, 185);
-  }
 }
 
 // the setup routine runs once when you press reset:
@@ -199,8 +108,8 @@ void setup() {
   initPins();
   SetDrive(0, 0);
 
-  xPosn.setup();      // Start Quad Decode position count
-  yPosn.setup();      // Start Quad Decode position count
+  leftEncoder.setup();      // Start Quad Decode position count
+  rightEncoder.setup();      // Start Quad Decode position count
 
   serialTimer.begin(timerInt, GUI_UPDATE_TIME); // GUI Update time
 
@@ -208,10 +117,10 @@ void setup() {
   {
     delay(100);
   }
+  
   isLeftFrontTriggered = false;
   isRightFrontTriggered = false;
   delay(500);
-
 }
 
 // the loop routine runs over and over again 5ever:
@@ -219,41 +128,24 @@ extern "C" int main(void)
 {
   setup();
 
-  int32_t buffer[2];  // Values to send, X,Y,Z realtime and latched
-
   while (true)
   {
-    DriveLogic();
+//    DriveLogic();
 
     if (doOutput)
     {
       doOutput = false;
-
-      if (zero_rtX )
-      {
-        xPosn.zeroFTM();
-      }
-
-      rtX = xPosn.calcPosn();
-
-      if (zero_rtY )
-      {
-        yPosn.zeroFTM();
-      }
-      rtY = yPosn.calcPosn();
+      
+      DriveStraight(80);
 
       // Send out axis values
-      buffer[0] = rtX;
-      buffer[1] = rtY;
+//      Serial.print("L_Encoder: ");
+//      Serial.println(rtL);
+//      Serial.print("R_Encoder: ");
+//      Serial.println(rtR);
 
-      // Send out rtX, rtY values
-      for (uint8_t j = 0; j < 2; ++j)
-      {
-        Serial.print(cmdPointers[j]);
-        Serial.println(buffer[j]);
-      }
+      Serial.println("MSTeensy Loop");Serial.println("");
 
-      Serial.println("MSTeensy Loop");
 
     }
   }
@@ -293,5 +185,78 @@ void ISR_IR_RR()
 void timerInt(void)
 {
     doOutput=true;
+}
+
+void SetDrive(int left, int right)
+{
+  if (left >= 0)
+  {
+    analogWrite(DRIVE_LEFT_PIN_A, abs(left));
+    analogWrite(DRIVE_LEFT_PIN_B, 0);
+  }
+  else
+  {
+    analogWrite(DRIVE_LEFT_PIN_A, 0);
+    analogWrite(DRIVE_LEFT_PIN_B, abs(left));
+  }
+
+  if (right >= 0)
+  {
+    analogWrite(DRIVE_RIGHT_PIN_A, abs(right));
+    analogWrite(DRIVE_RIGHT_PIN_B, 0);
+  }
+  else
+  {
+    analogWrite(DRIVE_RIGHT_PIN_A, 0);
+    analogWrite(DRIVE_RIGHT_PIN_B, abs(right));
+  }
+}
+
+void DriveStraight(int desiredSpeed)
+{
+  rtL = leftEncoder.calcPosn();
+  rtR = rightEncoder.calcPosn();
+
+  Serial.print("initial L_Speed: ");
+  Serial.println(leftSpeed);
+  Serial.print("initial R_Speed: ");
+  Serial.println(rightSpeed);
+
+  Serial.print("L_Encoder: ");
+  Serial.println(rtL);
+  Serial.print("R_Encoder: ");
+  Serial.println(rtR);
+
+  int32_t leftTicksAhead = rtL - rtR;
+
+  Serial.print("leftTicksAhead: ");
+  Serial.println(leftTicksAhead);
+
+  if(leftSpeed == 0 && rightSpeed == 0)
+  {
+    leftSpeed = desiredSpeed;
+    rightSpeed = desiredSpeed;
+  }
+
+  leftSpeed = leftSpeed - leftTicksAhead/STRAIGHTEN_SCALING_FACTOR;
+  rightSpeed = rightSpeed + leftTicksAhead/STRAIGHTEN_SCALING_FACTOR;
+
+  Serial.print("adjusted L_Speed: ");
+  Serial.println(leftSpeed);
+  Serial.print("adjusted R_Speed: ");
+  Serial.println(rightSpeed);
+
+  float readjustmentFactor = float(abs(leftSpeed) + abs(rightSpeed)) / float(abs(desiredSpeed) * 2.0F);
+  Serial.print("readjustmentFactor: ");
+  Serial.println(readjustmentFactor);
+  int scaledleftSpeed = leftSpeed/readjustmentFactor;
+  int scaledrightSpeed = rightSpeed/readjustmentFactor;
+  
+  Serial.print("scaled L_Speed: ");
+  Serial.println(scaledleftSpeed);
+  Serial.print("scaled R_Speed: ");
+  Serial.println(scaledrightSpeed);
+  
+  SetDrive(scaledleftSpeed, scaledrightSpeed);
 }
 
