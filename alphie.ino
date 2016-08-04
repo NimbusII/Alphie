@@ -73,6 +73,7 @@ volatile bool isRightRearTriggered = false;
 
 int leftSpeed = 0;
 int rightSpeed = 0;
+int32_t prevLeftTicksAhead = 0;
 
 ///////////////FUNCTION DECLERAIONS////////////
 
@@ -229,6 +230,13 @@ void DriveStraight(int desiredSpeed)
 
   int32_t leftTicksAhead = rtL - rtR;
 
+  if((leftTicksAhead * prevLeftTicksAhead) < 0)
+  {
+    leftSpeed = 0;
+    rightSpeed = 0;
+  }
+
+  prevLeftTicksAhead = leftTicksAhead;
   Serial.print("leftTicksAhead: ");
   Serial.println(leftTicksAhead);
 
@@ -236,6 +244,7 @@ void DriveStraight(int desiredSpeed)
   {
     leftSpeed = desiredSpeed;
     rightSpeed = desiredSpeed;
+    return;
   }
 
   leftSpeed = leftSpeed - leftTicksAhead/STRAIGHTEN_SCALING_FACTOR;
