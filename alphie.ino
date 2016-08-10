@@ -27,6 +27,7 @@ constexpr uint8_t REAR_LEFT_IR_PIN = 11;
 constexpr uint8_t REAR_RIGHT_IR_PIN = 12;
 
 constexpr uint8_t START_PIN = 15;
+constexpr uint8_t SHARP_IR = 17;
 
 constexpr uint8_t LCD_RS_PIN = 18;
 constexpr uint8_t LCD_ENABLE_PIN = 19;
@@ -73,6 +74,7 @@ volatile bool isRightRearTriggered = false;
 
 int leftSpeed = 0;
 int rightSpeed = 0;
+int rangeValue = 0;
 int32_t prevLeftTicksAhead = 0;
 
 ///////////////FUNCTION DECLERAIONS////////////
@@ -131,24 +133,27 @@ extern "C" int main(void)
 
   while (true)
   {
+	  rangeValue = analogRead(SHARP_IR);
+	  Serial.println(rangeValue);
+	  delay(100);
 //    DriveLogic();
 
-    if (doOutput)
-    {
-      doOutput = false;
-      
-      DriveStraight(80);
+//    if (doOutput)
+//    {
+//      doOutput = false;
+//
+//      DriveStraight(80);
+//
+//      // Send out axis values
+////      Serial.print("L_Encoder: ");
+////      Serial.println(rtL);
+////      Serial.print("R_Encoder: ");
+////      Serial.println(rtR);
+//
+//      Serial.println("MSTeensy Loop");Serial.println("");
+//    }
 
-      // Send out axis values
-//      Serial.print("L_Encoder: ");
-//      Serial.println(rtL);
-//      Serial.print("R_Encoder: ");
-//      Serial.println(rtR);
 
-      Serial.println("MSTeensy Loop");Serial.println("");
-
-
-    }
   }
 
 }
