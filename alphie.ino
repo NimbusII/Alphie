@@ -16,10 +16,10 @@ constexpr uint8_t DRIVE_LEFT_PIN_B = 6;
 constexpr uint8_t DRIVE_RIGHT_PIN_A = 9;
 constexpr uint8_t DRIVE_RIGHT_PIN_B = 10;
 
-//constexpr uint8_t ENCODER_LEFT_PIN_A = 3
-//constexpr uint8_t ENCODER_LEFT_PIN_B = 4
-//constexpr uint8_t ENCODER_RIGHT_PIN_A = 25
-//constexpr uint8_t ENCODER_RIGHT_PIN_B = 32
+constexpr uint8_t ENCODER_LEFT_PIN_A = 3;
+constexpr uint8_t ENCODER_LEFT_PIN_B = 4;
+constexpr uint8_t ENCODER_RIGHT_PIN_A = 25;
+constexpr uint8_t ENCODER_RIGHT_PIN_B = 32;
 
 constexpr uint8_t FRONT_LEFT_IR_PIN = 7;
 constexpr uint8_t FRONT_RIGHT_IR_PIN = 8;
@@ -38,8 +38,9 @@ constexpr uint8_t LCD_D7_PIN = 23;
 
 // leftover pins: 0, 1 (TX, RX)
 // 2
-// 13-18 (13 built in led)
-// 16, 17 will probably be secondary motors at some point
+// 13-14 (13 built in led)
+// 16 will probably be secondary motors at some point
+// 18,19 are i2c, may need these
 
 ///////////////////ENCODERS////////////////////
 volatile int32_t rtL = 0, rtR = 0;
@@ -66,6 +67,14 @@ enum PROG {
   CAN_RUN,
   NUM_PROGRAMS
 };
+
+enum STATES {
+  SEEK,
+  DESTROY,
+  AVOID
+};
+
+volatile char currentState = SEEK;
 
 volatile bool isLeftFrontTriggered = false;
 volatile bool isRightFrontTriggered = false;
@@ -136,23 +145,6 @@ extern "C" int main(void)
 	  rangeValue = analogRead(SHARP_IR);
 	  Serial.println(rangeValue);
 	  delay(100);
-//    DriveLogic();
-
-//    if (doOutput)
-//    {
-//      doOutput = false;
-//
-//      DriveStraight(80);
-//
-//      // Send out axis values
-////      Serial.print("L_Encoder: ");
-////      Serial.println(rtL);
-////      Serial.print("R_Encoder: ");
-////      Serial.println(rtR);
-//
-//      Serial.println("MSTeensy Loop");Serial.println("");
-//    }
-
 
   }
 
@@ -162,7 +154,7 @@ void ISR_IR_LF()
 {
   if (!isLeftFrontTriggered)
   {
-    //    SetDrive(0, 0);
+        SetDrive(0, 0); // this is dangerous, watch out for this
   }
   isLeftFrontTriggered = true;
 }
